@@ -91,22 +91,34 @@ void join_ap()
     usart_puts(cmdstr);
 }
 
+void get_wifi_ip()
+{
+    char cmdstr[] = "AT+CIFSR\r\n";
+    usart_puts(cmdstr);
+}
+
 void got_ok()
 {
     if (wifi_state == JOINING_AP) {
         wifi_state = WIFI_UP;
+        get_wifi_ip();
         led_toggle();
+    }
+}
+
+void got_ready()
+{
+    if (wifi_state == INIT) {
+        led_toggle();
+        wifi_state = READY;
+        join_ap();
     }
 }
 
 void parse_command()
 {
     if (strncmp(uart_in, "ready", 5) == 0) {
-        if (wifi_state == INIT) {
-            led_toggle();
-            wifi_state = READY;
-            join_ap();
-        }
+        got_ready();
     }
     else if (strncmp(uart_in, "OK", 2) == 0) {
         got_ok();
