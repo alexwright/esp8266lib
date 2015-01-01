@@ -4,6 +4,8 @@
 #include <avr/interrupt.h>
 #include <string.h>
 
+#include "wifi_settings.h"
+
 #define F_CPU 16000000UL
 #define UART_BAUD 9600
 #define BAUD_PRESCALE (((F_CPU / (UART_BAUD * 16UL))) - 1)
@@ -62,8 +64,49 @@ int main (void)
     }
 }
 
+typedef enum {
+    INIT,
+    READY,
+    JOINING_AP,
+    WIFI_UP,
+    CONNECTING_TCP,
+} wifi_state_t;
+wifi_state_t wifi_state = INIT;
+
+void join_ap()
+{
+    wifi_state = JOINING_AP;
+    //AT+CWJAP="ssid","pass";
+    char cmdstr[64] = "AT+CWJAP=\"";
+    strncat(cmdstr, WIFI_SSID, 20);
+    strcat(cmdstr, "\",\"");
+    strncat(cmdstr, WIFI_WPAPSK, 20);
+    strcat(cmdstr, "\";\r\n");
+    usart_puts(cmdstr);
+}
+
+void got_ok()
+{
+    if (wifi_state == JOINING_AP) {
+        wifi_state = WIFI_UP;
+        led_toggle();
+    }
+}
+
 void parse_command()
 {
+    if (strncmp(uart_in, "ready", 5) == 0) {
+        if (wifi_state == INIT) {
+            led_toggle();
+            wifi_state = READY;
+            join_ap();
+        }
+    }
+    else if (strncmp(uart_in, "OK", 2) == 0) {
+        got_ok();
+    }
+    else {
+    }
 }
 
 ISR (USART_RX_vect)
@@ -71,9 +114,6 @@ ISR (USART_RX_vect)
     char c = UDR0;
 
     if (c == NL) {
-        //uart_in[uart_in_pos + 1] = 0x00;
-        //usart_puts("OK+");
-        //usart_puts(uart_in);
         uart_in_pos = 0;
         parse_command();
     }
