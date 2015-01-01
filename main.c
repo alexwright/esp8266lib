@@ -55,11 +55,17 @@ void led_toggle()
     PORTB ^= _BV(PB5);
 }
 
+void send_reset()
+{
+    usart_puts("AT+RST\r\n");
+}
+
 int main (void)
 {
     DDRB |= _BV(DDB5);
     uart_setup();
     sei();
+    send_reset();
     while (1) {
     }
 }
