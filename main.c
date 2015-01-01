@@ -4,9 +4,11 @@
 #include <avr/interrupt.h>
 #include <string.h>
 
+#include "softuart.h"
+
 #include "wifi_settings.h"
 
-#define F_CPU 16000000UL
+//#define F_CPU 16000000UL
 #define UART_BAUD 9600
 #define BAUD_PRESCALE (((F_CPU / (UART_BAUD * 16UL))) - 1)
 
@@ -50,6 +52,11 @@ void usart_puts (const char *send)
     }
 }
 
+void debug(char *str)
+{
+	softuart_puts(str);
+}
+
 void led_toggle()
 {
     PORTB ^= _BV(PB5);
@@ -62,10 +69,12 @@ void send_reset()
 
 int main (void)
 {
+    softuart_init();
     DDRB |= _BV(DDB5);
     uart_setup();
     sei();
     send_reset();
+    debug("Boot\r\n");
     while (1) {
     }
 }
