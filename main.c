@@ -4,8 +4,6 @@
 #include <avr/interrupt.h>
 #include <string.h>
 
-#include "softuart.h"
-
 #include "wifi_settings.h"
 
 //#define F_CPU 16000000UL
@@ -13,7 +11,7 @@
 #define BAUD_PRESCALE (((F_CPU / (UART_BAUD * 16UL))) - 1)
 
 #define NL '\n'
-#define CR '\r'
+#define CR 0x0D
 #define CRNL "\r\n"
 
 unsigned int uart_in_pos = 0;
@@ -54,27 +52,41 @@ void usart_puts (const char *send)
 
 void debug(char *str)
 {
-	softuart_puts(str);
+	//softuart_puts(str);
 }
 
-void led_toggle()
+#define RED1 PB5
+#define GREEN1 PB4
+#define RED2 PB3
+
+void led_set(unsigned char port)
 {
-    PORTB ^= _BV(PB5);
+    PORTB |= (1 << (port));
+}
+void led_clear(unsigned char port)
+{
+    PORTB &= ~(1 << (port));
+}
+void led_toggle(unsigned char port)
+{
+    PORTB ^= _BV(port);
 }
 
 void send_reset()
 {
+    debug("sending reset\r\n");
     usart_puts("AT+RST\r\n");
 }
-
+void echo_handlers();
 int main (void)
 {
-    softuart_init();
+    //softuart_init();
     DDRB |= _BV(DDB5);
+    DDRB |= _BV(DDB4);
+    DDRB |= _BV(DDB3);
     uart_setup();
     sei();
     send_reset();
-    debug("Boot\r\n");
     while (1) {
     }
 }
@@ -90,6 +102,7 @@ wifi_state_t wifi_state = INIT;
 
 void join_ap()
 {
+    debug("sending AT+CWJAP\r\n");
     wifi_state = JOINING_AP;
     //AT+CWJAP="ssid","pass";
     char cmdstr[64] = "AT+CWJAP=\"";
@@ -100,10 +113,41 @@ void join_ap()
     usart_puts(cmdstr);
 }
 
+int debug_mode = 0;
+
+typedef enum {
+	NORMAL,
+	RESP_IP_ADDR,
+} parser_state_t;
+parser_state_t parser_state = NORMAL;
+
 void get_wifi_ip()
 {
+    debug_mode = 1;
     char cmdstr[] = "AT+CIFSR\r\n";
     usart_puts(cmdstr);
+}
+
+void at_rst_echo()
+{
+    led_set(RED2);
+    //usart_puts("1\r\n");
+    wifi_state = INIT; // If we see RST echoed back the module is cycling
+}
+
+void at_cifsr_echo()
+{
+    led_set(GREEN1);
+    //usart_puts("2\r\n");
+    parser_state = RESP_IP_ADDR;
+}
+
+void got_ready()
+{
+    if (wifi_state == INIT) {
+        wifi_state = READY;
+        join_ap();
+    }
 }
 
 void got_ok()
@@ -111,18 +155,71 @@ void got_ok()
     if (wifi_state == JOINING_AP) {
         wifi_state = WIFI_UP;
         get_wifi_ip();
-        led_toggle();
     }
 }
 
-void got_ready()
+void got_ip_addr()
 {
-    if (wifi_state == INIT) {
-        led_toggle();
-        wifi_state = READY;
-        join_ap();
+    led_set(RED1);
+    usart_puts("Gots me an ip: ");
+    usart_puts(uart_in);
+}
+
+typedef struct resp_handler {
+    char *key;
+    void (*callback)();
+} resp_handler_s;
+
+struct resp_handler handlers[4] = {
+    { .key = "ready", .callback = &got_ready },
+    { .key = "OK", .callback = &got_ok },
+    { .key = "AT+RST", .callback = &at_rst_echo },
+    { .key = "AT+CIFSR", .callback = &at_cifsr_echo },
+};
+
+void handle_command()
+{
+    if (parser_state == RESP_IP_ADDR) {
+        got_ip_addr();
+        parser_state = NORMAL;
+    }
+    else {
+        unsigned int i;
+        for (i = 0; i < 4; i++) {
+            if (strncmp(handlers[i].key, uart_in, 32) == 0) {
+                (handlers[i].callback)();
+                return;
+            }
+        }
+        if (debug_mode) {
+            usart_puts("uknown: ");
+            usart_puts(uart_in);
+        }
     }
 }
+
+ISR (USART_RX_vect)
+{
+    char c = UDR0;
+    if (c == 0x0D) {
+        uart_in[uart_in_pos] = 0x00;
+        uart_in_pos = 0;
+        if (strlen(uart_in) == 0) {
+            //usart_puts("no input?\r\n");
+        }
+        else {
+            handle_command();
+        }
+    }
+    else if (c == 0x0A) {
+        // ignore?
+    }
+    else {
+        uart_in[uart_in_pos++] = c;
+    }
+}
+
+/*
 
 void parse_command()
 {
@@ -136,16 +233,55 @@ void parse_command()
     }
 }
 
+typedef enum {
+	NORMAL,
+	RESP_MODE,
+	AT_RESP_MODE,
+	RESP_BODY,
+	RESP_BODY_IP_ADDR,
+} parser_state_t;
+parser_state_t parser_state = NORMAL;
+
+void got_echo()
+{
+    if (strncmp(uart_in, "AT+RST", 6) == 0) {
+    }
+    else if (strncmp(uart_in, "AT+CIFSR", 8) == 0) {
+        led_set(GREEN1);
+        uart_in_pos = 0; // Getting ready to read the addr
+        parser_state = RESP_BODY_IP_ADDR;
+    }
+    else {
+        led_set(RED2);
+    }
+}
+
 ISR (USART_RX_vect)
 {
     char c = UDR0;
+    //usart_putc(c);
 
     if (c == NL) {
-        uart_in_pos = 0;
         parse_command();
+        uart_in_pos = 0;
     }
     else if (c == CR) {
-        // Just ignore CR for now
+        if (parser_state == RESP_BODY_IP_ADDR) {
+            led_set(RED2);
+            usart_puts("Got ip: ");
+            uart_in[uart_in_pos] = 0x00;
+            usart_puts(uart_in);
+            parser_state = NORMAL;
+        }
+        if (strncmp(uart_in, "AT+", 3) == 0) {
+            // Start of a command being echoed back.
+            uart_in[uart_in_pos] = 0x00;
+            uart_in_pos++;
+            got_echo();
+        }
+        else {
+            led_set(RED1);
+        }
     }
     else {
         uart_in[uart_in_pos] = c;
@@ -157,3 +293,4 @@ ISR (USART_RX_vect)
         uart_in_pos = 0;
     }
 }
+*/
