@@ -8,7 +8,7 @@
 #include "wifi_settings.h"
 
 //#define F_CPU 16000000UL
-#define UART_BAUD 19200
+#define UART_BAUD 57600
 #define BAUD_PRESCALE (((F_CPU / (UART_BAUD * 16UL))) - 1)
 
 #define NL '\n'
