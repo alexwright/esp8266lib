@@ -51,11 +51,6 @@ void usart_puts (const char *send)
     }
 }
 
-void debug(char *str)
-{
-	//softuart_puts(str);
-}
-
 #define RED1 PB5
 #define GREEN1 PB4
 #define RED2 PB3
@@ -75,7 +70,6 @@ void led_toggle(unsigned char port)
 
 void send_reset()
 {
-    debug("sending reset\r\n");
     usart_puts("AT+RST\r\n");
 }
 void echo_handlers();
@@ -105,7 +99,6 @@ wifi_state_t wifi_state = INIT;
 
 void join_ap()
 {
-    debug("sending AT+CWJAP\r\n");
     wifi_state = JOINING_AP;
     //AT+CWJAP="ssid","pass";
     char cmdstr[64] = "AT+CWJAP=\"";
