@@ -72,6 +72,12 @@ void send_reset()
 {
     usart_puts("AT+RST\r\n");
 }
+
+void disable_echo()
+{
+    usart_puts("ATE0\r\n");
+}
+
 void echo_handlers();
 void button_setup();
 int main (void)
