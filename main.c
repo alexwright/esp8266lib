@@ -68,18 +68,10 @@ void led_toggle(unsigned char port)
     PORTB ^= _BV(port);
 }
 
-void send_reset()
-{
-    usart_puts("AT+RST\r\n");
-}
-
-void disable_echo()
-{
-    usart_puts("ATE0\r\n");
-}
-
 void echo_handlers();
 void button_setup();
+void send_reset();
+
 int main (void)
 {
     //softuart_init();
@@ -95,17 +87,37 @@ int main (void)
 }
 
 typedef enum {
+    ATE0,
+    CWJAP,
+    RESET,
+    REQ_IP,
+    NONE,
+} last_req_t;
+last_req_t last_req = NONE;
+
+typedef enum {
+    UNKNOWN,
     INIT,
     READY,
-    JOINING_AP,
     WIFI_UP,
-    CONNECTING_TCP,
 } wifi_state_t;
-wifi_state_t wifi_state = INIT;
+wifi_state_t wifi_state = UNKNOWN;
+
+void send_reset()
+{
+    last_req = RESET;
+    usart_puts("AT+RST\r\n");
+}
+
+void disable_echo()
+{
+    last_req = ATE0;
+    usart_puts("ATE0\r\n");
+}
 
 void join_ap()
 {
-    wifi_state = JOINING_AP;
+    last_req = CWJAP;
     //AT+CWJAP="ssid","pass";
     char cmdstr[64] = "AT+CWJAP=\"";
     strncat(cmdstr, WIFI_SSID, 20);
@@ -116,6 +128,8 @@ void join_ap()
 }
 
 int debug_mode = 0;
+int uart_echo = 1;
+int expect_resp = 0;
 
 typedef enum {
 	NORMAL,
@@ -125,6 +139,8 @@ parser_state_t parser_state = NORMAL;
 
 void get_wifi_ip()
 {
+    expect_resp = 1;
+    last_req = REQ_IP;
     debug_mode = 1;
     char cmdstr[] = "AT+CIFSR\r\n";
     _delay_ms(30);
@@ -149,15 +165,33 @@ void got_ready()
 {
     if (wifi_state == INIT) {
         wifi_state = READY;
-        join_ap();
+        disable_echo();
     }
 }
 
 void got_ok()
 {
-    if (wifi_state == JOINING_AP) {
+    if (last_req == RESET) {
+        //usart_puts("Last: reset\r\n");
+        wifi_state = INIT;
+    }
+    else if (last_req == ATE0) {
+        //usart_puts("Last: ATE0\r\n");
+        join_ap();
+        led_set(RED2);
+        uart_echo = 0;
+    }
+    else if (last_req == CWJAP) {
+        //usart_puts("Last: CWJAP\r\n");
         wifi_state = WIFI_UP;
         get_wifi_ip();
+    }
+    else if (last_req == REQ_IP) {
+        led_set(GREEN1);
+    }
+    else {
+        usart_puts("Last: ");
+        usart_putc(last_req);
     }
 }
 
@@ -166,6 +200,20 @@ void got_ip_addr()
     led_set(RED1);
     usart_puts("Gots me an ip: ");
     usart_puts(uart_in);
+    usart_puts("\r\n");
+}
+
+void got_data()
+{
+    if (last_req == REQ_IP) {
+        expect_resp = 0;
+        got_ip_addr();
+    }
+}
+
+void error()
+{
+    led_toggle(RED1);
 }
 
 typedef struct resp_handler {
@@ -173,11 +221,12 @@ typedef struct resp_handler {
     void (*callback)();
 } resp_handler_s;
 
-struct resp_handler handlers[4] = {
+struct resp_handler handlers[5] = {
     { .key = "ready", .callback = &got_ready },
     { .key = "OK", .callback = &got_ok },
     { .key = "AT+RST", .callback = &at_rst_echo },
     { .key = "AT+CIFSR", .callback = &at_cifsr_echo },
+    { .key = "Error", .callback = &error },
 };
 
 void handle_command()
@@ -188,14 +237,27 @@ void handle_command()
     }
     else {
         unsigned int i;
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < 5; i++) {
             if (strncmp(handlers[i].key, uart_in, 32) == 0) {
                 (handlers[i].callback)();
                 return;
             }
         }
-        if (wifi_state == INIT && uart_in[0] == '[' && strncmp(uart_in+1, "System Ready", 12)) {
+        if (wifi_state == INIT && uart_in[0] == '[' && strncmp(uart_in + 1, "System Ready", 12) == 0) {
             got_ready();
+            led_set(RED1);
+            return;
+        }
+        if (expect_resp) {
+            got_data();
+            return;
+        }
+        if (wifi_state == INIT || wifi_state == UNKNOWN) {
+            // ESP8266 spews a lot of garbage (data, but the wrong baud I think)on boot.
+            return;
+        }
+        if (uart_echo) {
+            // Best just to ignore the echo until it's disabled I guess.
             return;
         }
         if (debug_mode) {
