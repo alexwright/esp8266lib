@@ -3,11 +3,12 @@
 #include <avr/sfr_defs.h>
 #include <avr/interrupt.h>
 #include <string.h>
+#include <util/delay.h>
 
 #include "wifi_settings.h"
 
 //#define F_CPU 16000000UL
-#define UART_BAUD 9600
+#define UART_BAUD 19200
 #define BAUD_PRESCALE (((F_CPU / (UART_BAUD * 16UL))) - 1)
 
 #define NL '\n'
@@ -78,6 +79,7 @@ void send_reset()
     usart_puts("AT+RST\r\n");
 }
 void echo_handlers();
+void button_setup();
 int main (void)
 {
     //softuart_init();
@@ -87,6 +89,7 @@ int main (void)
     uart_setup();
     sei();
     send_reset();
+    button_setup();
     while (1) {
     }
 }
@@ -125,6 +128,7 @@ void get_wifi_ip()
 {
     debug_mode = 1;
     char cmdstr[] = "AT+CIFSR\r\n";
+    _delay_ms(30);
     usart_puts(cmdstr);
 }
 
@@ -217,6 +221,20 @@ ISR (USART_RX_vect)
     else {
         uart_in[uart_in_pos++] = c;
     }
+}
+
+void button_setup()
+{
+    DDRD = 1 << PD2;
+    PORTD = 1 << PD2;
+    
+    EIMSK = 1 << INT0;
+    MCUCR = 1 << ISC01 | 1 << ISC00;
+}
+
+ISR(INT0_vect)
+{
+    get_wifi_ip();
 }
 
 /*
