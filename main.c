@@ -188,6 +188,10 @@ void handle_command()
                 return;
             }
         }
+        if (wifi_state == INIT && uart_in[0] == '[' && strncmp(uart_in+1, "System Ready", 12)) {
+            got_ready();
+            return;
+        }
         if (debug_mode) {
             usart_puts("uknown: ");
             usart_puts(uart_in);
