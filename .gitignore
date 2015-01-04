@@ -1,0 +1,13 @@
+*.o
+*.hex
+*.elf
+*.exe
+*.pdf
+*.zip
+*.bin
+*.dump
+*.txt
+*.swp
+*.swo
+
+wifi_settings.h
