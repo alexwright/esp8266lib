@@ -91,6 +91,7 @@ typedef enum {
     CWJAP,
     RESET,
     REQ_IP,
+    CIPMUX,
     NONE,
 } last_req_t;
 last_req_t last_req = NONE;
@@ -147,6 +148,12 @@ void get_wifi_ip()
     usart_puts(cmdstr);
 }
 
+void set_ip_mux()
+{
+    usart_puts("AT+CIPMUX=1\r\n");
+    last_req = CIPMUX;
+}
+
 void at_rst_echo()
 {
     led_set(RED2);
@@ -187,6 +194,9 @@ void got_ok()
         get_wifi_ip();
     }
     else if (last_req == REQ_IP) {
+        set_ip_mux();
+    }
+    else if (last_req == CIPMUX) {
         led_set(GREEN1);
     }
     else {
