@@ -1,13 +1,11 @@
-//#include <avr/iom328p.h>
+#include "esp8266.h"
+
 #include <avr/io.h>
-#include <avr/sfr_defs.h>
 #include <avr/interrupt.h>
 #include <string.h>
-#include <util/delay.h>
 
 #include "wifi_settings.h"
 
-//#define F_CPU 16000000UL
 #define UART_BAUD 57600
 #define BAUD_PRESCALE (((F_CPU / (UART_BAUD * 16UL))) - 1)
 
@@ -30,7 +28,6 @@ void uart_setup()
     // Set baud rate
     UBRR0H = (BAUD_PRESCALE >> 8);
     UBRR0L = BAUD_PRESCALE;
-    //UBRR0 = 0x0033;
     // Enable the USART Receive interrupt
     UCSR0B |= (1 << RXCIE0 );
 }
@@ -51,40 +48,9 @@ void usart_puts (const char *send)
     }
 }
 
-#define RED1 PB5
-#define GREEN1 PB4
-#define RED2 PB3
-
-void led_set(unsigned char port)
-{
-    PORTB |= (1 << (port));
-}
-void led_clear(unsigned char port)
-{
-    PORTB &= ~(1 << (port));
-}
-void led_toggle(unsigned char port)
-{
-    PORTB ^= _BV(port);
-}
-
 void echo_handlers();
 void button_setup();
 void send_reset();
-
-int main (void)
-{
-    //softuart_init();
-    DDRB |= _BV(DDB5);
-    DDRB |= _BV(DDB4);
-    DDRB |= _BV(DDB3);
-    uart_setup();
-    sei();
-    send_reset();
-    button_setup();
-    while (1) {
-    }
-}
 
 typedef enum {
     ATE0,
@@ -139,13 +105,18 @@ typedef enum {
 } parser_state_t;
 parser_state_t parser_state = NORMAL;
 
+void esp8266_setup()
+{
+    uart_setup();
+    sei();
+    send_reset();
+}
+
 void get_wifi_ip()
 {
     expect_resp = 1;
     last_req = REQ_IP;
-    debug_mode = 1;
     char cmdstr[] = "AT+CIFSR\r\n";
-    _delay_ms(30);
     usart_puts(cmdstr);
 }
 
@@ -196,7 +167,6 @@ void got_ok()
         set_ip_mux();
     }
     else if (last_req == CIPMUX) {
-        led_set(GREEN1);
         open_connection();
     }
     else if (last_req == CIPSTART) {
@@ -221,7 +191,6 @@ void got_data()
 
 void error()
 {
-    led_toggle(RED1);
 }
 
 typedef struct resp_handler {
@@ -257,7 +226,6 @@ void handle_command()
         }
         if (wifi_state == INIT && uart_in[0] == '[' && strncmp(uart_in + 1, "System Ready", 12) == 0) {
             got_ready();
-            led_set(RED1);
             return;
         }
         if (expect_resp) {
