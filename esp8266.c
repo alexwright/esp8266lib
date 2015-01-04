@@ -4,8 +4,6 @@
 #include <avr/interrupt.h>
 #include <string.h>
 
-#include "wifi_settings.h"
-
 #define UART_BAUD 57600
 #define BAUD_PRESCALE (((F_CPU / (UART_BAUD * 16UL))) - 1)
 
@@ -83,14 +81,16 @@ void disable_echo()
     usart_puts("ATE0\r\n");
 }
 
+char *_ssid;
+char *_password;
 void join_ap()
 {
     last_req = CWJAP;
     //AT+CWJAP="ssid","pass";
     char cmdstr[64] = "AT+CWJAP=\"";
-    strncat(cmdstr, WIFI_SSID, 20);
+    strncat(cmdstr, _ssid, 20);
     strcat(cmdstr, "\",\"");
-    strncat(cmdstr, WIFI_WPAPSK, 20);
+    strncat(cmdstr, _password, 20);
     strcat(cmdstr, "\";\r\n");
     usart_puts(cmdstr);
 }
@@ -105,8 +105,10 @@ typedef enum {
 } parser_state_t;
 parser_state_t parser_state = NORMAL;
 
-void esp8266_setup()
+void esp8266_setup(char *ssid, char *password, void (*ready_callback)())
 {
+    _ssid = ssid;
+    _password = password;
     uart_setup();
     sei();
     send_reset();
