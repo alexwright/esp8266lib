@@ -154,20 +154,6 @@ void set_ip_mux()
     last_req = CIPMUX;
 }
 
-void at_rst_echo()
-{
-    led_set(RED2);
-    //usart_puts("1\r\n");
-    wifi_state = INIT; // If we see RST echoed back the module is cycling
-}
-
-void at_cifsr_echo()
-{
-    led_set(GREEN1);
-    //usart_puts("2\r\n");
-    parser_state = RESP_IP_ADDR;
-}
-
 void got_ready()
 {
     if (wifi_state == INIT) {
@@ -179,17 +165,13 @@ void got_ready()
 void got_ok()
 {
     if (last_req == RESET) {
-        //usart_puts("Last: reset\r\n");
         wifi_state = INIT;
     }
     else if (last_req == ATE0) {
-        //usart_puts("Last: ATE0\r\n");
         join_ap();
-        led_set(RED2);
         uart_echo = 0;
     }
     else if (last_req == CWJAP) {
-        //usart_puts("Last: CWJAP\r\n");
         wifi_state = WIFI_UP;
         get_wifi_ip();
     }
@@ -207,10 +189,6 @@ void got_ok()
 
 void got_ip_addr()
 {
-    led_set(RED1);
-    usart_puts("Gots me an ip: ");
-    usart_puts(uart_in);
-    usart_puts("\r\n");
 }
 
 void got_data()
@@ -231,11 +209,8 @@ typedef struct resp_handler {
     void (*callback)();
 } resp_handler_s;
 
-struct resp_handler handlers[5] = {
-    { .key = "ready", .callback = &got_ready },
+struct resp_handler handlers[2] = {
     { .key = "OK", .callback = &got_ok },
-    { .key = "AT+RST", .callback = &at_rst_echo },
-    { .key = "AT+CIFSR", .callback = &at_cifsr_echo },
     { .key = "Error", .callback = &error },
 };
 
@@ -247,7 +222,7 @@ void handle_command()
     }
     else {
         unsigned int i;
-        for (i = 0; i < 5; i++) {
+        for (i = 0; i < 2; i++) {
             if (strncmp(handlers[i].key, uart_in, 32) == 0) {
                 (handlers[i].callback)();
                 return;
