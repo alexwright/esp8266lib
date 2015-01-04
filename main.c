@@ -158,6 +158,17 @@ void set_ip_mux()
 void open_connection()
 {
     usart_puts("AT+CIPSTART=1,\"TCP\",\"144.76.186.140\",9091\r\n");
+    last_req = CIPSTART;
+}
+
+void linked()
+{
+    // Connected
+}
+
+void srsly_error()
+{
+    // CIPSTART failed
 }
 
 void got_ready()
@@ -188,6 +199,8 @@ void got_ok()
         led_set(GREEN1);
         open_connection();
     }
+    else if (last_req == CIPSTART) {
+    }
     else {
         usart_puts("Last: ");
         usart_putc(last_req);
@@ -216,9 +229,12 @@ typedef struct resp_handler {
     void (*callback)();
 } resp_handler_s;
 
-struct resp_handler handlers[2] = {
+struct resp_handler handlers[5] = {
     { .key = "OK", .callback = &got_ok },
     { .key = "Error", .callback = &error },
+    { .key = "Linked", .callback = &linked },
+    { .key = "ERROR", .callback = &srsly_error },
+    { .key = "ALREAY CONNECT", .callback = 0x00 },
 };
 
 void handle_command()
@@ -229,8 +245,12 @@ void handle_command()
     }
     else {
         unsigned int i;
-        for (i = 0; i < 2; i++) {
+        for (i = 0; i < 5; i++) {
             if (strncmp(handlers[i].key, uart_in, 32) == 0) {
+                if (!handlers[i].callback) {
+                    // Nonsense stuff like "ALREAY CONNECT" are nulled out.
+                    return;
+                }
                 (handlers[i].callback)();
                 return;
             }
