@@ -105,13 +105,26 @@ typedef enum {
 } parser_state_t;
 parser_state_t parser_state = NORMAL;
 
+void (*_ready_callback)();
 void esp8266_setup(char *ssid, char *password, void (*ready_callback)())
 {
     _ssid = ssid;
     _password = password;
+    _ready_callback = ready_callback;
     uart_setup();
     sei();
     send_reset();
+}
+
+void ready_to_use()
+{
+    if (_ready_callback) {
+        _ready_callback();
+        usart_puts("Calling _ready_callback");
+    }
+    else {
+        usart_puts("Callback wasn't set?");
+    }
 }
 
 void get_wifi_ip()
@@ -169,7 +182,7 @@ void got_ok()
         set_ip_mux();
     }
     else if (last_req == CIPMUX) {
-        open_connection();
+        ready_to_use();
     }
     else if (last_req == CIPSTART) {
     }
