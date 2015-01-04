@@ -140,9 +140,32 @@ void set_ip_mux()
     last_req = CIPMUX;
 }
 
-void open_connection()
+typedef struct socket_info {
+    unsigned int id; // 0 - 4
+    void (*data_received_callback)();
+} socket_info_s;
+struct socket_info open_sockets[5] = {
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
+void open_socket(char * dest, char * port, unsigned int id, void (*data_received_callback)(unsigned int bytes, char * data))
 {
-    usart_puts("AT+CIPSTART=1,\"TCP\",\"144.76.186.140\",9091\r\n");
+    if (id > 4) {
+        return;
+    }
+    char cmd[53] = "AT+CIPSTART=";
+    itoa(id, cmd + strlen(cmd), 10);
+    strcat(cmd, ",\"TCP\",\"");
+    strncat(cmd, dest, 15);
+    strcat(cmd, "\",");
+    strncat(cmd, port, 6);
+    strcat(cmd, "\r\n");
+    open_sockets[id] = (socket_info_s) { .id = id, .data_received_callback = data_received_callback };;
+    usart_puts(cmd);
     last_req = CIPSTART;
 }
 
