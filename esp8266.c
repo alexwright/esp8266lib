@@ -120,7 +120,6 @@ void ready_to_use()
 {
     if (_ready_callback) {
         _ready_callback();
-        usart_puts("Calling _ready_callback");
     }
     else {
         usart_puts("Callback wasn't set?");
