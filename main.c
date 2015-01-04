@@ -92,6 +92,7 @@ typedef enum {
     RESET,
     REQ_IP,
     CIPMUX,
+    CIPSTART,
     NONE,
 } last_req_t;
 last_req_t last_req = NONE;
@@ -154,6 +155,11 @@ void set_ip_mux()
     last_req = CIPMUX;
 }
 
+void open_connection()
+{
+    usart_puts("AT+CIPSTART=1,\"TCP\",\"144.76.186.140\",9091\r\n");
+}
+
 void got_ready()
 {
     if (wifi_state == INIT) {
@@ -180,6 +186,7 @@ void got_ok()
     }
     else if (last_req == CIPMUX) {
         led_set(GREEN1);
+        open_connection();
     }
     else {
         usart_puts("Last: ");
